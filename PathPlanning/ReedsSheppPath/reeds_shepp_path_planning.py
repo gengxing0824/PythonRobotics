@@ -53,19 +53,48 @@ def mod2pi(x):
 
 def straight_left_straight(x, y, phi):
     phi = mod2pi(phi)
-    if y > 0.0 and 0.0 < phi < math.pi * 0.99:
+    if 0.0 < phi < math.pi * 0.99:
         xd = - y / math.tan(phi) + x
         t = xd - math.tan(phi / 2.0)
         u = phi
-        v = math.hypot(x - xd, y) - math.tan(phi / 2.0)
+        if y > 0 :
+            v = math.hypot(x - xd, y) - math.tan(phi / 2.0)
+        elif y < 0:
+            v = -math.hypot(x - xd, y) - math.tan(phi / 2.0)
         return True, t, u, v
-    elif y < 0.0 < phi < math.pi * 0.99:
-        xd = - y / math.tan(phi) + x
-        t = xd - math.tan(phi / 2.0)
+    if 0.0 > phi > -math.pi * 0.99:
+        t_p = math.pi + phi   
+        xd = - y / math.tan(t_p) + x
+        t = xd + 1 / math.tan(t_p / 2.0)
         u = phi
-        v = -math.hypot(x - xd, y) - math.tan(phi / 2.0)
+        if y > 0 :
+            v = - math.hypot(x - xd, y) - math.tan(u / 2.0)
+        elif y < 0:
+            v = math.hypot(x - xd, y) - math.tan(u / 2.0)
         return True, t, u, v
+    return False, 0.0, 0.0, 0.0
 
+def straight_right_straight(x, y, phi):
+    phi = mod2pi(phi)
+    if 0.0 < phi < math.pi * 0.99:
+        xd = - y / math.tan(phi) + x
+        t = xd + math.tan(phi / 2.0)
+        u = -phi
+        if y > 0 :
+            v = math.hypot(x - xd, y) + math.tan(phi / 2.0)
+        elif y < 0:
+            v = -math.hypot(x - xd, y) + math.tan(phi / 2.0)
+        return True, t, u, v
+    if 0.0 > phi > -math.pi * 0.99:
+        t_p = math.pi + phi   
+        xd = - y / math.tan(t_p) + x
+        t = xd - 1 / math.tan(t_p / 2.0)
+        u = -phi
+        if y > 0 :
+            v = -math.hypot(x - xd, y) - math.tan(u / 2.0)
+        elif y < 0:
+            v = math.hypot(x - xd, y) - math.tan(u / 2.0)
+        return True, t, u, v
     return False, 0.0, 0.0, 0.0
 
 
@@ -95,7 +124,7 @@ def straight_curve_straight(x, y, phi, paths, step_size):
     if flag:
         paths = set_path(paths, [t, u, v], ["S", "L", "S"], step_size)
 
-    flag, t, u, v = straight_left_straight(x, -y, -phi)
+    flag, t, u, v = straight_right_straight(x, y, phi)
     if flag:
         paths = set_path(paths, [t, u, v], ["S", "R", "S"], step_size)
 
@@ -234,8 +263,8 @@ def generate_path(q0, q1, max_curvature, step_size):
 
     paths = []
     paths = straight_curve_straight(x, y, dth, paths, step_size)
-    paths = curve_straight_curve(x, y, dth, paths, step_size)
-    paths = curve_curve_curve(x, y, dth, paths, step_size)
+    # paths = curve_straight_curve(x, y, dth, paths, step_size)
+    # paths = curve_curve_curve(x, y, dth, paths, step_size)
 
     return paths
 
@@ -326,10 +355,20 @@ def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
     return paths
 
 
-def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2):
+def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2, get_all = False):
     paths = calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size)
     if not paths:
         return None, None, None, None, None  # could not generate any path
+
+    if get_all:
+        paths_x, paths_y, paths_yaw, paths_ctypes, paths_lengths = [], [], [], [], []
+        for path in paths:
+            paths_x.append(path.x)
+            paths_y.append(path.y)
+            paths_yaw.append(path.yaw)
+            paths_ctypes.append(path.ctypes)
+            paths_lengths.append(path.lengths)
+        return paths_x, paths_y, paths_yaw, paths_ctypes, paths_lengths
 
     # search minimum cost path
     best_path_index = paths.index(min(paths, key=lambda p: abs(p.L)))
@@ -341,27 +380,28 @@ def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2):
 def main():
     print("Reeds Shepp path planner sample start!!")
 
-    start_x = -1.0  # [m]
-    start_y = -4.0  # [m]
-    start_yaw = np.deg2rad(-20.0)  # [rad]
+    start_x = 0.0  # [m]
+    start_y = 0.0  # [m]
+    start_yaw = np.deg2rad(0.0)  # [rad]
 
-    end_x = 5.0  # [m]
-    end_y = 5.0  # [m]
-    end_yaw = np.deg2rad(25.0)  # [rad]
+    end_x = 10.0  # [m]
+    end_y = 10.0  # [m]
+    end_yaw = np.deg2rad(50.0)  # [rad]
 
-    curvature = 0.1
+    curvature = 1/5
     step_size = 0.05
 
     xs, ys, yaws, modes, lengths = reeds_shepp_path_planning(start_x, start_y,
                                                              start_yaw, end_x,
                                                              end_y, end_yaw,
                                                              curvature,
-                                                             step_size)
+                                                             step_size,
+                                                             get_all = True)
 
-    if show_animation:  # pragma: no cover
+    if show_animation and xs is float:  # pragma: no cover
         plt.cla()
         plt.plot(xs, ys, label="final course " + str(modes))
-        print(f"{lengths=}")
+        print("lengths=", lengths)
 
         # plotting
         plot_arrow(start_x, start_y, start_yaw)
@@ -370,6 +410,20 @@ def main():
         plt.legend()
         plt.grid(True)
         plt.axis("equal")
+        plt.show()
+
+    if show_animation and type(xs) is list:
+        for x, y, yaw, mode, length in zip(xs, ys, yaws, modes, lengths):
+            plt.plot(x, y, label="final course " + str(mode))
+            print("lengths=", length)
+
+            # plotting
+            plot_arrow(start_x, start_y, start_yaw)
+            plot_arrow(end_x, end_y, end_yaw)
+
+            plt.legend()
+            plt.grid(True)
+            plt.axis("equal")
         plt.show()
 
     if not xs:

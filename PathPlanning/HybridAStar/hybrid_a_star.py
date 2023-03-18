@@ -17,9 +17,10 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent))
 
 from dynamic_programming_heuristic import calc_distance_heuristic
 from ReedsSheppPath import reeds_shepp_path_planning as rs
+# import reeds_shepp_path_planning as rs
 from car import move, check_car_collision, MAX_STEER, WB, plot_car, BUBBLE_R
 
-XY_GRID_RESOLUTION = 2.0  # [m]
+XY_GRID_RESOLUTION = 0.5  # [m]
 YAW_GRID_RESOLUTION = np.deg2rad(15.0)  # [rad]
 MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
 N_STEER = 20  # number of steer command
@@ -375,13 +376,51 @@ def calc_index(node, c):
         print("Error(calc_index):", ind)
 
     return ind
+def get_map():
+    ox, oy = [], []
+
+    max_x = 25
+    max_y = 10
+    for i in range(max_x):
+        ox.append(i)
+        oy.append(0)
+    for i in range(max_y):
+        ox.append(max_x)
+        oy.append(i)
+    for i in range(max_x):
+        ox.append(i)
+        oy.append(max_y)
+    for i in range(max_y):
+        ox.append(0)
+        oy.append(i)
+    
+    up1 = 10
+    up2 = 5
+    for i in range(up2):
+        ox.append(up1)
+        oy.append(i)
+    for i in range(up1+1):
+        ox.append(i)
+        oy.append(up2)
+    
+    y2 = 5
+    x2 = 14
+    for i in range(x2, max_x):
+        ox.append(i)
+        oy.append(y2)
+    for i in range(y2):
+        ox.append(x2)
+        oy.append(i)
+
+    return ox, oy
 
 
 def main():
     print("Start Hybrid A* planning")
 
+    
     ox, oy = [], []
-
+    
     for i in range(60):
         ox.append(i)
         oy.append(0.0)
@@ -400,10 +439,12 @@ def main():
     for i in range(40):
         ox.append(40.0)
         oy.append(60.0 - i)
-
+    
+    ox, oy = get_map()
+    
     # Set Initial parameters
-    start = [10.0, 10.0, np.deg2rad(90.0)]
-    goal = [50.0, 50.0, np.deg2rad(-90.0)]
+    start = [10.0, 7.5, np.deg2rad(0.0)]
+    goal = [12.5, 2, np.deg2rad(90.0)]
 
     print("start : ", start)
     print("goal : ", goal)
@@ -432,7 +473,7 @@ def main():
             plt.axis("equal")
             plot_car(i_x, i_y, i_yaw)
             plt.pause(0.0001)
-
+        plt.pause(100)
     print(__file__ + " done!!")
 
 
