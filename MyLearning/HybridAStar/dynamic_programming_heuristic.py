@@ -13,7 +13,7 @@ import math
 
 import matplotlib.pyplot as plt
 
-show_animation = False
+show_animation = True
 
 
 class Node:
@@ -44,8 +44,9 @@ def calc_final_path(goal_node, closed_node_set, resolution):
 
 def calc_distance_heuristic(gx, gy, ox, oy, resolution, rr):
     """
+    计算距离启发式
     gx: goal x position [m]
-    gx: goal x position [m]
+    gy: goal y position [m]
     ox: x position list of Obstacles [m]
     oy: y position list of Obstacles [m]
     resolution: grid resolution [m]
@@ -133,7 +134,14 @@ def verify_node(node, obstacle_map, min_x, min_y, max_x, max_y):
     return True
 
 
-def calc_obstacle_map(ox, oy, resolution, vr):
+def calc_obstacle_map(ox, oy, resolution, rr):
+    """
+    ox: x position list of Obstacles [m]
+    oy: y position list of Obstacles [m]
+    resolution: grid resolution [m]
+    rr: robot radius[m]
+    return: 
+    """
     min_x = round(min(ox))
     min_y = round(min(oy))
     max_x = round(max(ox))
@@ -151,9 +159,13 @@ def calc_obstacle_map(ox, oy, resolution, vr):
             #  print(x, y)
             for iox, ioy in zip(ox, oy):
                 d = math.hypot(iox - x, ioy - y)
-                if d <= vr / resolution:
+                if d <= rr / resolution:
                     obstacle_map[ix][iy] = True
                     break
+    if show_animation:
+        plt.cla()
+        plt.imshow(obstacle_map)
+        plt.show()
 
     return obstacle_map, min_x, min_y, max_x, max_y, x_width, y_width
 

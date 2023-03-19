@@ -18,12 +18,12 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent))
 from dynamic_programming_heuristic import calc_distance_heuristic
 from ReedsSheppPath import reeds_shepp_path_planning as rs
 # import reeds_shepp_path_planning as rs
-from car import move, check_car_collision, MAX_STEER, WB, plot_car, BUBBLE_R
+from car import move, check_car_collision, MAX_STEER, WB, plot_car, BUBBLE_R, MAX_CURVATURE
 
 XY_GRID_RESOLUTION = 0.5  # [m]
 YAW_GRID_RESOLUTION = np.deg2rad(15.0)  # [rad]
 MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
-N_STEER = 20  # number of steer command
+N_STEER = 3  # number of steer command
 
 SB_COST = 100.0  # switch back penalty cost
 BACK_COST = 5.0  # backward penalty cost
@@ -97,6 +97,7 @@ def calc_motion_inputs():
 
 def get_neighbors(current, config, ox, oy, kd_tree):
     for steer, d in calc_motion_inputs():
+        print("steer, d", steer, d)
         node = calc_next_node(current, steer, d, config, ox, oy, kd_tree)
         if node and verify_index(node, config):
             yield node
@@ -159,7 +160,8 @@ def analytic_expansion(current, goal, ox, oy, kd_tree):
     goal_y = goal.y_list[-1]
     goal_yaw = goal.yaw_list[-1]
 
-    max_curvature = math.tan(MAX_STEER) / WB
+    # max_curvature = math.tan(MAX_STEER) / WB
+    max_curvature = MAX_CURVATURE
     paths = rs.calc_paths(start_x, start_y, start_yaw,
                           goal_x, goal_y, goal_yaw,
                           max_curvature, step_size=MOTION_RESOLUTION)
@@ -170,7 +172,20 @@ def analytic_expansion(current, goal, ox, oy, kd_tree):
     best_path, best = None, None
 
     for path in paths:
-        if check_car_collision(path.x, path.y, path.yaw, ox, oy, kd_tree):
+        # if show_animation:
+        #     x = path.x_list
+        #     y = path.y_list
+        #     yaw = path.yaw_list
+        #     for i_x, i_y, i_yaw in zip(x, y, yaw):
+        #         plt.cla()
+        #         plt.plot(ox, oy, ".k")
+        #         plt.plot(x, y, "-r", label="Hybrid A* path")
+        #         plt.grid(True)
+        #         plt.axis("equal")
+        #         plot_car(i_x, i_y, i_yaw)
+        #         plt.pause(0.0001)
+        #     plt.show()
+        if check_car_collision(path.x, path.y, path.yaw, ox, oy, kd_tree): # 碰撞检测
             cost = calc_rs_path_cost(path)
             if not best or best > cost:
                 best = cost
@@ -186,6 +201,7 @@ def update_node_with_analytic_expansion(current, goal,
     if path:
         if show_animation:
             plt.plot(path.x, path.y)
+            plt.show()
         f_x = path.x[1:]
         f_y = path.y[1:]
         f_yaw = path.yaw[1:]
@@ -215,7 +231,7 @@ def calc_rs_path_cost(reed_shepp_path):
             cost += abs(length) * BACK_COST
 
     # switch back penalty
-    for i in range(len(reed_shepp_path.lengths) - 1):
+    for i in np.arange(len(reed_shepp_path.lengths) - 1):
         # switch back
         if reed_shepp_path.lengths[i] * reed_shepp_path.lengths[i + 1] < 0.0:
             cost += SB_COST
@@ -229,13 +245,13 @@ def calc_rs_path_cost(reed_shepp_path):
     # calc steer profile
     n_ctypes = len(reed_shepp_path.ctypes)
     u_list = [0.0] * n_ctypes
-    for i in range(n_ctypes):
+    for i in np.arange(n_ctypes):
         if reed_shepp_path.ctypes[i] == "R":
             u_list[i] = - MAX_STEER
         elif reed_shepp_path.ctypes[i] == "L":
             u_list[i] = MAX_STEER
 
-    for i in range(len(reed_shepp_path.ctypes) - 1):
+    for i in np.arange(len(reed_shepp_path.ctypes) - 1):
         cost += STEER_CHANGE_COST * abs(u_list[i + 1] - u_list[i])
 
     return cost
@@ -247,14 +263,14 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
     goal: goal node
     ox: x position list of Obstacles [m]
     oy: y position list of Obstacles [m]
-    xy_resolution: grid resolution [m]
-    yaw_resolution: yaw angle resolution [rad]
+    xy_resolution: grid resolution [m] 网格分辨率
+    yaw_resolution: yaw angle resolution [rad] 偏航角分辨率
     """
 
     start[2], goal[2] = rs.pi_2_pi(start[2]), rs.pi_2_pi(goal[2])
     tox, toy = ox[:], oy[:]
 
-    obstacle_kd_tree = cKDTree(np.vstack((tox, toy)).T)
+    obstacle_kd_tree = cKDTree(np.vstack((tox, toy)).T) # KDTree是一个非常高效的最邻近搜索算法，通过建立索引树来提高检索速度
 
     config = Config(tox, toy, xy_resolution, yaw_resolution)
 
@@ -273,10 +289,10 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
         goal_node.x_list[-1], goal_node.y_list[-1],
         ox, oy, xy_resolution, BUBBLE_R)
 
-    pq = []
+    pq = [] # [(calc_cost, calc_index)]
     openList[calc_index(start_node, config)] = start_node
     heapq.heappush(pq, (calc_cost(start_node, h_dp, config),
-                        calc_index(start_node, config)))
+                        calc_index(start_node, config))) # 最小堆
     final_path = None
 
     while True:
@@ -307,6 +323,7 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
             print("path found")
             break
 
+        # hybrid a star 节点扩展``
         for neighbor in get_neighbors(current, config, ox, oy,
                                       obstacle_kd_tree):
             neighbor_index = calc_index(neighbor, config)
@@ -380,35 +397,35 @@ def get_map():
     ox, oy = [], []
 
     max_x = 25
-    max_y = 10
-    for i in range(max_x):
+    max_y = 15
+    for i in np.arange(0, max_x, 0.1):
         ox.append(i)
         oy.append(0)
-    for i in range(max_y):
+    for i in np.arange(0, max_y, 0.1):
         ox.append(max_x)
         oy.append(i)
-    for i in range(max_x):
+    for i in np.arange(0, max_x, 0.1):
         ox.append(i)
         oy.append(max_y)
-    for i in range(max_y):
+    for i in np.arange(0, max_y, 0.1):
         ox.append(0)
         oy.append(i)
     
     up1 = 10
     up2 = 5
-    for i in range(up2):
+    for i in np.arange(0, up2, 0.1):
         ox.append(up1)
         oy.append(i)
-    for i in range(up1+1):
+    for i in np.arange(0, up1, 0.1):
         ox.append(i)
         oy.append(up2)
     
     y2 = 5
     x2 = 14
-    for i in range(x2, max_x):
+    for i in np.arange(x2, max_x, 0.1):
         ox.append(i)
         oy.append(y2)
-    for i in range(y2):
+    for i in np.arange(0, y2, 0.1):
         ox.append(x2)
         oy.append(i)
 
@@ -417,30 +434,8 @@ def get_map():
 
 def main():
     print("Start Hybrid A* planning")
-
     
-    ox, oy = [], []
-    
-    for i in range(60):
-        ox.append(i)
-        oy.append(0.0)
-    for i in range(60):
-        ox.append(60.0)
-        oy.append(i)
-    for i in range(61):
-        ox.append(i)
-        oy.append(60.0)
-    for i in range(61):
-        ox.append(0.0)
-        oy.append(i)
-    for i in range(40):
-        ox.append(20.0)
-        oy.append(i)
-    for i in range(40):
-        ox.append(40.0)
-        oy.append(60.0 - i)
-    
-    ox, oy = get_map()
+    ox, oy = get_map()  # 生成障碍物。
     
     # Set Initial parameters
     start = [10.0, 7.5, np.deg2rad(0.0)]
@@ -473,7 +468,7 @@ def main():
             plt.axis("equal")
             plot_car(i_x, i_y, i_yaw)
             plt.pause(0.0001)
-        plt.pause(100)
+        plt.show()
     print(__file__ + " done!!")
 
 

@@ -23,6 +23,7 @@ W = 2.0  # width of car
 LF = 3.3  # distance from rear to vehicle front end
 LB = 1.0  # distance from rear to vehicle back end
 MAX_STEER = 0.6  # [rad] maximum steering angle
+MAX_CURVATURE = tan(MAX_STEER) / WB  # 自行车模型
 
 BUBBLE_DIST = (LF - LB) / 2.0  # distance from rear to center of vehicle.
 BUBBLE_R = np.hypot((LF + LB) / 2.0, W / 2.0)  # bubble radius
