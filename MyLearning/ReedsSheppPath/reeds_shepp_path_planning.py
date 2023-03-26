@@ -263,8 +263,8 @@ def generate_path(q0, q1, max_curvature, step_size):
 
     paths = []
     paths = straight_curve_straight(x, y, dth, paths, step_size)
-    # paths = curve_straight_curve(x, y, dth, paths, step_size)
-    # paths = curve_curve_curve(x, y, dth, paths, step_size)
+    paths = curve_straight_curve(x, y, dth, paths, step_size)
+    paths = curve_curve_curve(x, y, dth, paths, step_size)
 
     return paths
 

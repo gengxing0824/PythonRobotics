@@ -21,17 +21,19 @@ from ReedsSheppPath import reeds_shepp_path_planning as rs
 from car import move, check_car_collision, MAX_STEER, WB, plot_car, BUBBLE_R, MAX_CURVATURE
 
 XY_GRID_RESOLUTION = 0.5  # [m]
-YAW_GRID_RESOLUTION = np.deg2rad(15.0)  # [rad]
+YAW_GRID_RESOLUTION = np.deg2rad(1.0)  # [rad]
 MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
 N_STEER = 3  # number of steer command
 
-SB_COST = 100.0  # switch back penalty cost
-BACK_COST = 5.0  # backward penalty cost
-STEER_CHANGE_COST = 5.0  # steer angle change penalty cost
-STEER_COST = 1.0  # steer angle change penalty cost
-H_COST = 5.0  # Heuristic cost
+SB_COST = 1000.0  # switch back penalty cost 换档的代价
+BACK_COST = 1.0  # backward penalty cost
+STEER_CHANGE_COST = 20.0  # steer angle change penalty cost
+STEER_COST = 0.0  # steer angle change penalty cost
+H_COST = 10.0  # Heuristic costq
 
-show_animation = True
+MAX_FIND_PATH_NUM = 30
+show_animation = 0
+show_animation_end = 1
 
 
 class Node:
@@ -97,7 +99,6 @@ def calc_motion_inputs():
 
 def get_neighbors(current, config, ox, oy, kd_tree):
     for steer, d in calc_motion_inputs():
-        print("steer, d", steer, d)
         node = calc_next_node(current, steer, d, config, ox, oy, kd_tree)
         if node and verify_index(node, config):
             yield node
@@ -106,7 +107,7 @@ def get_neighbors(current, config, ox, oy, kd_tree):
 def calc_next_node(current, steer, direction, config, ox, oy, kd_tree):
     x, y, yaw = current.x_list[-1], current.y_list[-1], current.yaw_list[-1]
 
-    arc_l = XY_GRID_RESOLUTION * 1.5
+    arc_l = XY_GRID_RESOLUTION
     x_list, y_list, yaw_list = [], [], []
     for _ in np.arange(0, arc_l, MOTION_RESOLUTION):
         x, y, yaw = move(x, y, yaw, MOTION_RESOLUTION * direction, steer)
@@ -172,21 +173,12 @@ def analytic_expansion(current, goal, ox, oy, kd_tree):
     best_path, best = None, None
 
     for path in paths:
-        # if show_animation:
-        #     x = path.x_list
-        #     y = path.y_list
-        #     yaw = path.yaw_list
-        #     for i_x, i_y, i_yaw in zip(x, y, yaw):
-        #         plt.cla()
-        #         plt.plot(ox, oy, ".k")
-        #         plt.plot(x, y, "-r", label="Hybrid A* path")
-        #         plt.grid(True)
-        #         plt.axis("equal")
-        #         plot_car(i_x, i_y, i_yaw)
-        #         plt.pause(0.0001)
-        #     plt.show()
         if check_car_collision(path.x, path.y, path.yaw, ox, oy, kd_tree): # 碰撞检测
-            cost = calc_rs_path_cost(path)
+            print(current.direction)
+            if (path.lengths[0]*current.direction < 0.0):
+                cost = calc_rs_path_cost(path) + SB_COST
+            else:
+                cost = calc_rs_path_cost(path)
             if not best or best > cost:
                 best = cost
                 best_path = path
@@ -201,12 +193,15 @@ def update_node_with_analytic_expansion(current, goal,
     if path:
         if show_animation:
             plt.plot(path.x, path.y)
-            plt.show()
+            plt.pause(1)
         f_x = path.x[1:]
         f_y = path.y[1:]
         f_yaw = path.yaw[1:]
 
-        f_cost = current.cost + calc_rs_path_cost(path)
+        if (path.lengths[0]*current.direction < 0.0):
+            f_cost = current.cost + calc_rs_path_cost(path) + SB_COST
+        else:
+            f_cost = current.cost + calc_rs_path_cost(path) 
         f_parent_index = calc_index(current, c)
 
         fd = []
@@ -223,6 +218,7 @@ def update_node_with_analytic_expansion(current, goal,
 
 
 def calc_rs_path_cost(reed_shepp_path):
+    print(reed_shepp_path.lengths)
     cost = 0.0
     for length in reed_shepp_path.lengths:
         if length >= 0:  # forward
@@ -234,7 +230,8 @@ def calc_rs_path_cost(reed_shepp_path):
     for i in np.arange(len(reed_shepp_path.lengths) - 1):
         # switch back
         if reed_shepp_path.lengths[i] * reed_shepp_path.lengths[i + 1] < 0.0:
-            cost += SB_COST
+            cost = cost + SB_COST
+            print("cost:", cost)
 
     # steer penalty
     for course_type in reed_shepp_path.ctypes:
@@ -294,7 +291,7 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
     heapq.heappush(pq, (calc_cost(start_node, h_dp, config),
                         calc_index(start_node, config))) # 最小堆
     final_path = None
-
+    path_list = []
     while True:
         if not openList:
             print("Error: Cannot find path, No open set")
@@ -306,22 +303,25 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
             closedList[c_id] = current
         else:
             continue
-
-        if show_animation:  # pragma: no cover
-            plt.plot(current.x_list[-1], current.y_list[-1], "xc")
-            # for stopping simulation with the esc key.
+        
+        if show_animation:
+            plt.plot(current.x_list[-1], current.y_list[-1], "xc" , color = "red")
             plt.gcf().canvas.mpl_connect(
                 'key_release_event',
                 lambda event: [exit(0) if event.key == 'escape' else None])
-            if len(closedList.keys()) % 10 == 0:
-                plt.pause(0.001)
+            plt.pause(0.001)
+            # plt.waitforbuttonpress()
 
-        is_updated, final_path = update_node_with_analytic_expansion(
+
+        is_updated, find_path = update_node_with_analytic_expansion(
             current, goal_node, config, ox, oy, obstacle_kd_tree)
 
+
         if is_updated:
-            print("path found")
-            break
+            path_list.append(find_path)
+            print("path found, cost:", find_path.cost)
+            if len(path_list) > MAX_FIND_PATH_NUM:
+                break
 
         # hybrid a star 节点扩展``
         for neighbor in get_neighbors(current, config, ox, oy,
@@ -331,11 +331,15 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
                 continue
             if neighbor not in openList \
                     or openList[neighbor_index].cost > neighbor.cost:
-                heapq.heappush(
-                    pq, (calc_cost(neighbor, h_dp, config),
-                         neighbor_index))
+                heapq.heappush( pq, (calc_cost(neighbor, h_dp, config), neighbor_index))
                 openList[neighbor_index] = neighbor
 
+                if show_animation:
+                    plt.plot(neighbor.x_list[-1], neighbor.y_list[-1], ".")
+                    plt.pause(0.001)
+                    # plt.waitforbuttonpress()
+    final_path = min(path_list, key=lambda o: o.cost)
+    print("path found, min cost:", final_path.cost)
     path = get_final_path(closedList, final_path)
     return path
 
@@ -397,7 +401,7 @@ def get_map():
     ox, oy = [], []
 
     max_x = 25
-    max_y = 15
+    max_y = 10
     for i in np.arange(0, max_x, 0.1):
         ox.append(i)
         oy.append(0)
@@ -459,7 +463,7 @@ def main():
     y = path.y_list
     yaw = path.yaw_list
 
-    if show_animation:
+    if show_animation_end:
         for i_x, i_y, i_yaw in zip(x, y, yaw):
             plt.cla()
             plt.plot(ox, oy, ".k")

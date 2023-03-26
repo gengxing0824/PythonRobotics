@@ -162,10 +162,10 @@ def calc_obstacle_map(ox, oy, resolution, rr):
                 if d <= rr / resolution:
                     obstacle_map[ix][iy] = True
                     break
-    if show_animation:
-        plt.cla()
-        plt.imshow(obstacle_map)
-        plt.show()
+    # if show_animation:
+    #     plt.cla()
+    #     plt.imshow(obstacle_map)
+    #     plt.show()
 
     return obstacle_map, min_x, min_y, max_x, max_y, x_width, y_width
 
@@ -186,3 +186,4 @@ def get_motion_model():
               [1, 1, math.sqrt(2)]]
 
     return motion
+
